@@ -10,11 +10,11 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
-const CLIENT_HOST = process.env.CLIENT_HOST || 'http://localhost:3000';
 const JWT_SECRET = process.env.JWT_SECRET || 'next-chat-secret';
 
 // CORS 許可リスト（必要に応じて複数追加）
 const allowedOrigins = process.env.CORS_ORIGIN?.split(",") ?? []
+console.log('CORS allowed origins:', allowedOrigins);
 
 const roomMessages: Record<string, Message[]> = {};
 
@@ -46,6 +46,7 @@ io.use((socket: Socket, next) => {
     }
 
     try {
+        // JWT の検証
         const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; sender: string };
 
         socket.data.userId = decoded.userId;
@@ -66,14 +67,17 @@ io.on('connection', (socket: Socket) => {
         const userId = socket.data.userId;
         const token = socket.data.token;
 
+        // JOIN ROOM
         socket.join(room);
         socket.data.room = room;
 
         console.log(`${sender} joined room: ${room}`);
         console.log(`token: ${token}`);
 
+        // 認証
         socket.emit('auth', { token: socket.handshake.auth.token, userId });
 
+        // ルームに参加したユーザーにメッセージを送信
         const message = {
             room,
             sender,
@@ -81,7 +85,6 @@ io.on('connection', (socket: Socket) => {
             text: `${sender} joined the room`,
             date: new Date().toISOString(),
         };
-
         socket.to(room).emit('user-joined', message);
     });
 
@@ -94,7 +97,7 @@ io.on('connection', (socket: Socket) => {
             roomMessages[room] = [];
         }
         roomMessages[room].push(message);
-        // console.log('message:', message);
+        console.log('message:', message);
         io.to(room).emit('message', message);
     });
 

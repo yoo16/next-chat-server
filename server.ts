@@ -1,62 +1,67 @@
 import express from 'express';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
-import { v4 as uuidv4 } from 'uuid';
-// import jwt from "jsonwebtoken";
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 const CLIENT_HOST = process.env.CLIENT_HOST || 'http://localhost:3000';
+const JWT_SECRET = process.env.JWT_SECRET || 'next-chat-secret';
 
 const io = new Server(server, {
     cors: { origin: CLIENT_HOST, methods: ['GET', 'POST'] },
-    maxHttpBufferSize: 10 * 1024 * 1024, // 10MB
+    maxHttpBufferSize: 10 * 1024 * 1024,
 });
 
-// 接続前に auth を検証して socket.data に保存するミドルウェア
+// 接続前の JWT 認証ミドルウェア
 io.use((socket: Socket, next) => {
-    const { token } = socket.handshake.auth as {
-        token?: string;
-    };
-    // クライアントに自分の clientId を通知
-    console.log(`User ID for ${socket.data.sender}: ${socket.data.userId}`);
-    if (socket.data.token != token) {
-        return next(new Error('Authentication error: token is required'));
+    const { token } = socket.handshake.auth as { token?: string };
+
+    if (!token) {
+        return next(new Error('Authentication error: Missing token'));
     }
-    next();
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; sender: string };
+
+        socket.data.userId = decoded.userId;
+        socket.data.sender = decoded.sender;
+
+        next();
+    } catch (err) {
+        console.error('JWT verification failed:', err);
+        return next(new Error('Authentication error: Invalid token'));
+    }
 });
 
+// 接続後の処理
 io.on('connection', (socket: Socket) => {
-    // ルーム参加（クライアントからは { room } だけ送る）
-    socket.on('join-room', ({ room, sender }) => {
-        const token = uuidv4(); // トークンを生成
-        const userId = socket.id; // ユーザーIDを生成
+    socket.on('join-room', ({ room }) => {
+        const sender = socket.data.sender;
+        const userId = socket.data.userId;
 
         socket.join(room);
-
         socket.data.room = room;
-        socket.data.sender = sender;
-        socket.data.token = token;
-        socket.data.userId = userId;
+
         console.log(`${sender} joined room: ${room}`);
         console.log(`userId: ${userId}`);
-        console.log(`token: ${token}`);
 
-        socket.emit('auth', { token, userId });
+        socket.emit('auth', { token: socket.handshake.auth.token, userId });
 
-        // 参加通知
         const message = {
             room,
-            sender: sender,
-            userId: userId,
+            sender,
+            userId,
             text: `${sender} joined the room`,
             date: new Date().toISOString(),
         };
-        // ルーム内の他のユーザーに通知
+
         socket.to(room).emit('user-joined', message);
     });
 
-    // テキストメッセージ受信
     socket.on('message', (message) => {
         const room = socket.data.room as string;
         if (!room) return;
@@ -66,7 +71,6 @@ io.on('connection', (socket: Socket) => {
         io.to(room).emit('message', message);
     });
 
-    // 画像メッセージ受信
     socket.on('image', (message) => {
         const room = socket.data.room as string;
         if (!room) return;

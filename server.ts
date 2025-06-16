@@ -28,6 +28,7 @@ io.use((socket: Socket, next) => {
         const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; sender: string };
 
         socket.data.userId = decoded.userId;
+        socket.data.token = token;
         socket.data.sender = decoded.sender;
 
         next();
@@ -42,12 +43,13 @@ io.on('connection', (socket: Socket) => {
     socket.on('join-room', ({ room }) => {
         const sender = socket.data.sender;
         const userId = socket.data.userId;
+        const token = socket.data.token;
 
         socket.join(room);
         socket.data.room = room;
 
         console.log(`${sender} joined room: ${room}`);
-        console.log(`userId: ${userId}`);
+        console.log(`token: ${token}`);
 
         socket.emit('auth', { token: socket.handshake.auth.token, userId });
 

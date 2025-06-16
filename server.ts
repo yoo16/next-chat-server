@@ -75,7 +75,7 @@ io.on('connection', (socket: Socket) => {
         console.log(`token: ${token}`);
 
         // 認証
-        socket.emit('auth', { token: socket.handshake.auth.token, userId });
+        socket.emit('auth', { token, userId });
 
         // ルームに参加したユーザーにメッセージを送信
         const message = {

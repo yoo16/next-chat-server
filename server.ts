@@ -3,6 +3,8 @@ import http from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import cors from "cors";
+import { Message } from './interfaces/Message';
 
 dotenv.config();
 
@@ -11,8 +13,27 @@ const server = http.createServer(app);
 const CLIENT_HOST = process.env.CLIENT_HOST || 'http://localhost:3000';
 const JWT_SECRET = process.env.JWT_SECRET || 'next-chat-secret';
 
+// CORS 許可リスト（必要に応じて複数追加）
+const allowedOrigins = process.env.CORS_ORIGIN?.split(",") ?? []
+
+const roomMessages: Record<string, Message[]> = {};
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
+    credentials: true
+}));
+
 const io = new Server(server, {
-    cors: { origin: CLIENT_HOST, methods: ['GET', 'POST'] },
+    cors: {
+        origin: allowedOrigins,
+        credentials: true,
+    },
     maxHttpBufferSize: 10 * 1024 * 1024,
 });
 
@@ -69,7 +90,11 @@ io.on('connection', (socket: Socket) => {
         if (!room) return;
 
         message.date = new Date().toISOString();
-        console.log('message:', message);
+        if (!roomMessages[room]) {
+            roomMessages[room] = [];
+        }
+        roomMessages[room].push(message);
+        // console.log('message:', message);
         io.to(room).emit('message', message);
     });
 
@@ -80,6 +105,12 @@ io.on('connection', (socket: Socket) => {
         message.date = new Date().toISOString();
         console.log('image:', message);
         io.to(room).emit('image', message);
+    });
+
+    // 履歴取得リクエスト
+    socket.on("get-history", ({ room }) => {
+        const messages = roomMessages[room] || [];
+        socket.emit("history", messages);
     });
 
     socket.on('disconnect', () => {

@@ -85,7 +85,7 @@ io.on('connection', (socket: Socket) => {
             text: `${sender} joined the room`,
             date: new Date().toISOString(),
         };
-        socket.to(room).emit('user-joined', message);
+        // socket.to(room).emit('user-joined', message);
     });
 
     socket.on('message', (message) => {
@@ -98,7 +98,8 @@ io.on('connection', (socket: Socket) => {
         }
         roomMessages[room].push(message);
         console.log('message:', message);
-        io.to(room).emit('message', message);
+        // 自分以外のユーザーにメッセージを送信
+        socket.to(room).emit('message', message);
     });
 
     socket.on('image', (message) => {

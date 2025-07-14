@@ -63,7 +63,6 @@ io.use((socket: Socket, next) => {
 // 接続後の処理
 io.on('connection', (socket: Socket) => {
     socket.on('join-room', ({ room }) => {
-        const sender = socket.data.sender;
         const userId = socket.data.userId;
         const token = socket.data.token;
 
@@ -71,27 +70,14 @@ io.on('connection', (socket: Socket) => {
         socket.join(room);
         socket.data.room = room;
 
-        console.log(`${sender} joined room: ${room}`);
-        console.log(`token: ${token}`);
-
         // 認証
+        console.log(`token: ${token}`);
         socket.emit('auth', { token, userId });
-
-        // ルームに参加したユーザーにメッセージを送信
-        const message = {
-            room,
-            sender,
-            userId,
-            text: `${sender} joined the room`,
-            date: new Date().toISOString(),
-        };
-        // socket.to(room).emit('user-joined', message);
     });
 
     socket.on('message', (message) => {
         const room = socket.data.room as string;
         if (!room) return;
-
         message.date = new Date().toISOString();
         if (!roomMessages[room]) {
             roomMessages[room] = [];
@@ -118,7 +104,7 @@ io.on('connection', (socket: Socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log(`User disconnected: ${socket.data.sender}`);
+        console.log(`User disconnected: ${socket.data.userId}`);
     });
 });
 
